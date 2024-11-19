@@ -48,9 +48,52 @@ io.on("connection", function (socket) {
         // Fetch messages
         get_messages(object, function (response) {
             if (response) {
-                io.to(group_id).emit("response", {
-                    object_type: "get_messages",
-                    data: response,
+                const { group_id } = object;
+                const connection = con_mysql;
+        
+                connection.getConnection((err, db) => {
+                    if (err) {
+                        io.to(group_id).emit("error", {
+                            object_type: "get_messages",
+                            message: "Database connection error",
+                        });
+                        return;
+                    }
+        
+                    db.query(
+                        `SELECT 
+                            (SELECT avatar_image FROM users WHERE player_id = ?) AS moderator_avatar,
+                            (SELECT avatar_image FROM users WHERE player_id = ?) AS disputer_avatar,
+                            (SELECT avatar_image FROM users WHERE player_id = ?) AS disputer_against_avatar`,
+                        [
+                            response[0]?.moderator_id || null,
+                            response[0]?.disputer_id || null,
+                            response[0]?.disputed_against_id || null,
+                        ],
+                        (error, avatarResults) => {
+                            db.release();
+        
+                            if (error) {
+                                console.log("Error fetching avatars:", error);
+                                io.to(group_id).emit("error", {
+                                    object_type: "get_messages",
+                                    message: "Error fetching avatars",
+                                });
+                                return;
+                            }
+        
+                            const { moderator_avatar, disputer_avatar, disputer_against_avatar } =
+                                avatarResults[0] || {};
+        
+                            io.to(group_id).emit("response", {
+                                object_type: "get_messages",
+                                moderator_avatar: moderator_avatar || "",
+                                disputer_avatar: disputer_avatar || "",
+                                disputer_against_avatar: disputer_against_avatar || "",
+                                data: response,
+                            });
+                        }
+                    );
                 });
             } else {
                 io.to(group_id).emit("error", {
@@ -59,6 +102,7 @@ io.on("connection", function (socket) {
                 });
             }
         });
+        
     });
 
     // HANDLE SEND MESSAGE EVENT
@@ -118,7 +162,6 @@ const get_messages = (object, callback) => {
             `SELECT 
                 users.player_id AS sended_by, 
                 users.username,
-                users.avatar_image,
                 chats.disputer_id,
                 chats.disputed_against_id,
                 chats.moderator_id,
@@ -166,7 +209,6 @@ const send_message = (object, callback) => {
                     `SELECT
                         users.player_id AS sended_by, 
                         users.username,
-                        users.avatar_image,
                         chats.disputer_id,
                         chats.disputed_against_id,
                         chats.moderator_id,
