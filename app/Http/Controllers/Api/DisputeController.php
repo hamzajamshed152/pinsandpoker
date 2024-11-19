@@ -15,7 +15,7 @@ class DisputeController extends Controller
     {
         $game = Game::where('id', $request->game_id)->first();
 
-        $dispute_group_id = $request->disputer_id .'_'. $request->disputed_against_id .'_'. $game->user->player_id;
+        $dispute_group_id = 'group'.'_'. $game->user->player_id;
 
         $created_dispute = Dispute::create([
             'moderator_id'          => $game->user->player_id,

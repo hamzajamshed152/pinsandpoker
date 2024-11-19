@@ -11,10 +11,18 @@ const io = require("socket.io")(server, {
 });
 
 const mysql = require("mysql");
+// const con_mysql = mysql.createPool({
+//     host: "localhost",
+//     user: "pinsandpoker_user",
+//     password: "!@3&a$arHS1G",
+//     database: "pinsandpoker_main",
+//     debug: true,
+//     charset: "utf8mb4",
+// });
 const con_mysql = mysql.createPool({
     host: "localhost",
-    user: "pinsandpoker_user",
-    password: "!@3&a$arHS1G",
+    user: "root",
+    password: "",
     database: "pinsandpoker_main",
     debug: true,
     charset: "utf8mb4",
@@ -109,12 +117,16 @@ const get_messages = (object, callback) => {
         connection.query(
             `SELECT 
                 users.player_id AS sended_by, 
-                users.full_name, 
-                users.avatar, 
-                chats.message, 
-                chats.type, 
+                users.username,
+                users.avatar_image,
+                chats.disputer_id,
+                chats.disputed_against_id,
+                chats.moderator_id,
+                chats.group_id,
+                chats.message,
+                chats.type,
                 chats.seen, 
-                chats.created_at 
+                chats.created_at
              FROM chats
              INNER JOIN users ON chats.sended_by = users.player_id
              WHERE chats.group_id = ?
@@ -122,6 +134,9 @@ const get_messages = (object, callback) => {
             [group_id],
             (error, data) => {
                 connection.release();
+                if(error){
+                    console.log("error in get_messages",error);
+                }
                 callback(error ? false : data);
             }
         );
@@ -130,16 +145,16 @@ const get_messages = (object, callback) => {
 
 // SEND MESSAGE FUNCTION
 const send_message = (object, callback) => {
-    const { group_id, sended_by, message, type } = object;
+    const { disputer_id, disputed_against_id, moderator_id, group_id, sended_by, message, type } = object;
 
     con_mysql.getConnection((err, connection) => {
         if (err) return callback(false);
 
         const sanitized_message = mysql_real_escape_string(message);
         connection.query(
-            `INSERT INTO chats (group_id, sended_by, message, type, created_at) 
-             VALUES (?, ?, ?, ?, NOW())`,
-            [group_id, sended_by, sanitized_message, type],
+            `INSERT INTO chats (disputer_id, disputed_against_id, moderator_id, group_id, sended_by, message, type, created_at) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+            [disputer_id, disputed_against_id, moderator_id, group_id, sended_by, sanitized_message, type],
             (error, result) => {
                 if (error) {
                     connection.release();
@@ -148,20 +163,27 @@ const send_message = (object, callback) => {
 
                 // Fetch the newly inserted message
                 connection.query(
-                    `SELECT 
+                    `SELECT
                         users.player_id AS sended_by, 
-                        users.full_name, 
-                        users.avatar, 
-                        chats.message, 
-                        chats.type, 
+                        users.username,
+                        users.avatar_image,
+                        chats.disputer_id,
+                        chats.disputed_against_id,
+                        chats.moderator_id,
+                        chats.group_id,
+                        chats.message,
+                        chats.type,
                         chats.seen, 
-                        chats.created_at 
+                        chats.created_at
                      FROM chats
                      INNER JOIN users ON chats.sended_by = users.player_id
                      WHERE chats.id = ?`,
                     [result.insertId],
                     (error, data) => {
                         connection.release();
+                        if(error){
+                            console.log("error in send_message",error);
+                        }
                         callback(error ? false : data[0]);
                     }
                 );
